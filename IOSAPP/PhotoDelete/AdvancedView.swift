@@ -8,12 +8,10 @@
 import SwiftUI
 import Photos
 import Combine
-import StoreKit
 import UIKit
 
 struct AdvancedView: View {
     @EnvironmentObject var dataManager: DataManager
-    @EnvironmentObject var purchaseManager: PurchaseManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage(AppConstants.appLanguageKey) private var appLanguageValue = AppLanguage.system.rawValue
     @State private var selectedScope: AdvancedTimeScope = .month
@@ -22,29 +20,14 @@ struct AdvancedView: View {
     @State private var activePeriodRoute: AdvancedPeriodRoute?
     @State private var advancedRefreshWorkItem: DispatchWorkItem?
     @State private var lastDashboardRefreshKey: AdvancedDashboardRefreshKey?
-    @State private var showingSupporterBenefits = false
-    @State private var showingOfferCodeRedemption = false
     @State private var visibleAdvancedPeriodLimit = 5
 
     private var isLocked: Bool {
-        !purchaseManager.isSupporter
+        false
     }
 
     private var isAwaitingPhotoLibraryAccess: Bool {
         !isLocked && !dataManager.photoLibraryManager.hasPhotoLibraryAccess
-    }
-
-    private var entitlementStatusMessage: String? {
-        if let trialStatusText = purchaseManager.supporterTrialStatusText {
-            return trialStatusText
-        }
-
-        switch purchaseManager.entitlementState {
-        case .verifying:
-            return L10n.string("正在检查购买状态...")
-        case .unknown, .verified, .cachedOffline, .locked:
-            return nil
-        }
     }
 
     var body: some View {
@@ -69,12 +52,6 @@ struct AdvancedView: View {
             visibleAdvancedPeriodLimit = 5
             refreshAdvancedDashboard(resetSelectedPeriod: false, force: true)
         }
-        .onChange(of: purchaseManager.entitlementState) { _ in
-            refreshAdvancedDashboard(resetSelectedPeriod: true, force: true)
-        }
-        .onChange(of: purchaseManager.supporterTrialStartDate) { _ in
-            refreshAdvancedDashboard(resetSelectedPeriod: true, force: true)
-        }
         .onChange(of: dataManager.cleanupStatsRevision) { _ in
             scheduleAdvancedDashboardRefresh()
         }
@@ -93,7 +70,6 @@ struct AdvancedView: View {
         .task {
             dataManager.syncPhotoLibraryAuthorization()
             refreshAdvancedDashboard(resetSelectedPeriod: true)
-            await purchaseManager.activateStoreKit()
         }
     }
 
@@ -106,14 +82,6 @@ struct AdvancedView: View {
                 let periodSummaries = visiblePeriodSummaries
 
                 VStack(spacing: 16) {
-                    if purchaseManager.isUsingTrialSupporterAccess {
-                        AdvancedTrialStatusBanner(
-                            remainingDays: purchaseManager.supporterTrialDaysRemaining,
-                            isLoading: purchaseManager.isLoading,
-                            onPurchase: purchaseSupporter
-                        )
-                    }
-
                     if isAwaitingPhotoLibraryAccess {
                         PhotoAuthorizationCard(
                             subtitle: L10n.string("进阶功能需要读取本机照片库，才能生成真实月份进度和清理队列。"),
@@ -138,35 +106,13 @@ struct AdvancedView: View {
                     }
 
                     Spacer()
-                        .frame(height: isLocked ? 24 : 96)
+                        .frame(height: 96)
                 }
                 .padding(.horizontal, PhotoDeleteStyle.screenHorizontalPadding)
                 .padding(.top, PhotoDeleteStyle.rootContentTopSpacing)
                 .frame(maxWidth: PhotoDeleteAdaptiveLayout.readableContentMaxWidth(horizontalSizeClass: horizontalSizeClass))
                 .frame(maxWidth: .infinity)
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isLocked {
-                AdvancedBottomPaywall(
-                    priceText: purchaseManager.supporterPriceText,
-                    canStartTrial: purchaseManager.canStartSupporterTrial,
-                    isLoading: purchaseManager.isLoading,
-                    errorMessage: purchaseManager.errorMessage,
-                    statusMessage: entitlementStatusMessage,
-                    onStartTrial: startSupporterTrial,
-                    onPurchase: purchaseSupporter,
-                    onRestore: restorePurchases,
-                    onRedeemCode: { showingOfferCodeRedemption = true },
-                    onShowBenefits: { showingSupporterBenefits = true }
-                )
-            }
-        }
-        .sheet(isPresented: $showingSupporterBenefits) {
-            SupporterBenefitsSheet()
-        }
-        .offerCodeRedemption(isPresented: $showingOfferCodeRedemption) { result in
-            purchaseManager.handleOfferCodeRedemptionCompletion(result)
         }
     }
 
@@ -404,19 +350,12 @@ struct AdvancedView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(visibleQueues.enumerated()), id: \.element.id) { index, queue in
-                        if isLocked {
-                            Button(action: openLockedAdvancedFeature) {
-                                AdvancedCleanupEntryRow(queue: queue, isLocked: true)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            NavigationLink {
-                                cleanupDestination(for: queue.kind)
-                            } label: {
-                                AdvancedCleanupEntryRow(queue: queue, isLocked: false)
-                            }
-                            .buttonStyle(.plain)
+                        NavigationLink {
+                            cleanupDestination(for: queue.kind)
+                        } label: {
+                            AdvancedCleanupEntryRow(queue: queue, isLocked: false)
                         }
+                        .buttonStyle(.plain)
 
                         if index != visibleQueues.count - 1 {
                             Divider()
@@ -573,32 +512,11 @@ struct AdvancedView: View {
     }
 
     private func openAdvancedPeriod(_ summary: PhotoPeriodSummary, isLocked: Bool) {
-        guard !isLocked else {
-            openLockedAdvancedFeature()
-            return
-        }
-
         selectedPeriodDate = summary.intervalStart
         activePeriodRoute = AdvancedPeriodRoute(
             scope: summary.scope,
             intervalStart: summary.intervalStart
         )
-    }
-
-    private func openLockedAdvancedFeature() {
-        showingSupporterBenefits = true
-    }
-
-    private func purchaseSupporter() {
-        Task { await purchaseManager.purchaseSupporter() }
-    }
-
-    private func startSupporterTrial() {
-        purchaseManager.startSupporterTrial()
-    }
-
-    private func restorePurchases() {
-        Task { await purchaseManager.restorePurchases() }
     }
 
     private func scheduleAdvancedDashboardRefresh() {
@@ -972,197 +890,6 @@ private struct AdvancedPeriodProgressBadge: View {
                 .minimumScaleFactor(0.7)
         }
         .accessibilityHidden(true)
-    }
-}
-
-private struct AdvancedBottomPaywall: View {
-    let priceText: String
-    let canStartTrial: Bool
-    let isLoading: Bool
-    let errorMessage: String?
-    let statusMessage: String?
-    let onStartTrial: () -> Void
-    let onPurchase: () -> Void
-    let onRestore: () -> Void
-    let onRedeemCode: () -> Void
-    let onShowBenefits: () -> Void
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Capsule(style: .continuous)
-                .fill(PhotoDeleteStyle.hairline)
-                .frame(width: 38, height: 4)
-                .padding(.bottom, 4)
-
-            VStack(spacing: 5) {
-                HStack(spacing: 7) {
-                    Image(systemName: canStartTrial ? "timer" : "lock.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(canStartTrial ? L10n.string("免费体验进阶功能") : L10n.string("解锁全部进阶功能"))
-                        .font(.system(size: 20, weight: .semibold))
-                }
-                .foregroundColor(PhotoDeleteStyle.primaryText)
-
-                Text(subtitle)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(PhotoDeleteStyle.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-            }
-
-            if canStartTrial {
-                Button(action: onStartTrial) {
-                    Label(L10n.string("开始 3 天免费体验"), systemImage: "timer")
-                        .labelStyle(.titleAndIcon)
-                }
-                .photoDeletePrimaryButton()
-                .disabled(isLoading)
-
-                Button(action: onPurchase) {
-                    HStack(spacing: 8) {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: PhotoDeleteStyle.accent))
-                                .scaleEffect(0.78)
-                        }
-                        Text(isLoading ? L10n.string("处理中...") : String(format: L10n.string("开通年度 Pro %@/年"), priceText))
-                    }
-                }
-                .photoDeleteSecondaryButton()
-                .disabled(isLoading)
-            } else {
-                Button(action: onPurchase) {
-                    HStack(spacing: 8) {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: PhotoDeleteStyle.primaryButtonText))
-                                .scaleEffect(0.78)
-                        }
-                        Text(isLoading ? L10n.string("处理中...") : String(format: L10n.string("开通年度 Pro %@/年"), priceText))
-                    }
-                }
-                .photoDeletePrimaryButton()
-                .disabled(isLoading)
-            }
-
-            SupporterPurchaseAuxiliaryActionsRow(
-                isLoading: isLoading,
-                onRestore: onRestore,
-                onRedeemCode: onRedeemCode
-            )
-
-            Text(billingDisclosure)
-                .font(.system(size: 12, weight: .regular))
-                .foregroundColor(PhotoDeleteStyle.secondaryText)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            SupporterLegalLinksRow()
-
-            Button(action: onShowBenefits) {
-                Text(L10n.string("查看年度与永久 Pro 方案"))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(PhotoDeleteStyle.secondaryText)
-                    .underline()
-            }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
-
-            if let statusMessage {
-                Text(statusMessage)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(PhotoDeleteStyle.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(PhotoDeleteStyle.warning)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, PhotoDeleteStyle.screenHorizontalPadding)
-        .padding(.top, 16)
-        .padding(.bottom, 28)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(PhotoDeleteStyle.background.opacity(0.98))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(PhotoDeleteStyle.hairline, lineWidth: 1)
-                )
-                .ignoresSafeArea(edges: .bottom)
-        )
-    }
-
-    private var subtitle: String {
-        if canStartTrial {
-            return L10n.string("免费体验 3 天进阶功能，或开通年度 Pro；永久方案可在方案页选择。")
-        }
-
-        return L10n.string("年度 Pro 解锁完整时间列表、大文件清理、视频压缩、相似照片清理和主题切换。")
-    }
-
-    private var billingDisclosure: String {
-        if canStartTrial {
-            return L10n.string("3 天体验到期不会扣费；年度 Pro 会自动续订，可随时在 Apple ID 设置中取消。基础整理始终免费。")
-        }
-
-        return String(
-            format: L10n.string("年度 Pro 为 %@/年；确认购买后开始计费并自动续订，可随时在 Apple ID 设置中取消。永久 Pro 为一次购买。基础整理始终免费。"),
-            priceText
-        )
-    }
-}
-
-private struct AdvancedTrialStatusBanner: View {
-    let remainingDays: Int
-    let isLoading: Bool
-    let onPurchase: () -> Void
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "timer")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(PhotoDeleteStyle.accent)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(PhotoDeleteStyle.accent.opacity(0.12))
-                )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.string("支持者版试用中"))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(PhotoDeleteStyle.primaryText)
-
-                Text(String(format: L10n.string("还剩 %lld 天"), Int64(remainingDays)))
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(PhotoDeleteStyle.secondaryText)
-            }
-
-            Spacer(minLength: 8)
-
-            Button(action: onPurchase) {
-                Text(isLoading ? L10n.string("处理中...") : L10n.string("解锁"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(PhotoDeleteStyle.primaryButtonText)
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 44)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(PhotoDeleteStyle.accent)
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(isLoading)
-        }
-        .padding(14)
-        .photoDeleteCard()
     }
 }
 
@@ -6689,5 +6416,4 @@ private enum AdvancedPeriodFormatter {
 #Preview {
     AdvancedView()
         .environmentObject(DataManager())
-        .environmentObject(PurchaseManager())
 }

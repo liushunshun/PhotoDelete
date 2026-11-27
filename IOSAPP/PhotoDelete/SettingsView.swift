@@ -15,7 +15,6 @@ import MessageUI
 
 struct SettingsView: View {
     @EnvironmentObject var dataManager: DataManager
-    @EnvironmentObject var purchaseManager: PurchaseManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage(AppConstants.hasSeenIntroKey) private var hasSeenPhotoDeleteIntro = false
     @AppStorage(AppConstants.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
@@ -43,9 +42,6 @@ struct SettingsView: View {
                         // 使用统计
                         statsSection
 
-                        // 支持者版
-                        supporterSection
-
                         // 偏好设置
                         preferencesSection
 
@@ -54,9 +50,6 @@ struct SettingsView: View {
 
                         // 关于与支持
                         aboutSection
-
-                        // 作者的更多 App
-                        moreAppsSection
 
                         // 版本信息
                         versionInfo
@@ -90,14 +83,8 @@ struct SettingsView: View {
             #endif
             case .about:
                 AboutView()
-            case .author:
-                AuthorView()
             case .privacy:
                 PrivacyInfoView()
-            case .supporter:
-                SupporterView()
-                    .environmentObject(dataManager)
-                    .environmentObject(purchaseManager)
             case .cleanupActivity:
                 NavigationStack {
                     CleanupAchievementsView(
@@ -191,90 +178,6 @@ struct SettingsView: View {
         )
     }
 
-    // MARK: - 支持者版
-    private var supporterSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text(L10n.string("购买与恢复"))
-                    .photoDeleteSectionHeading()
-                Spacer()
-            }
-
-            VStack(spacing: 0) {
-                SettingRow(
-                    icon: supporterRowIcon,
-                    iconColor: supporterRowIconColor,
-                    title: supporterRowTitle,
-                    subtitle: supporterRowSubtitle,
-                    action: {
-                        activeSheet = .supporter
-                    }
-                )
-            }
-            .photoDeleteCard()
-        }
-    }
-
-    private var supporterRowIcon: String {
-        if purchaseManager.hasPaidSupporterAccess {
-            return "seal"
-        }
-
-        if purchaseManager.isUsingTrialSupporterAccess {
-            return "timer"
-        }
-
-        return "sparkles"
-    }
-
-    private var supporterRowIconColor: Color {
-        if purchaseManager.hasPaidSupporterAccess {
-            return PhotoDeleteStyle.positive
-        }
-
-        return PhotoDeleteStyle.accent
-    }
-
-    private var supporterRowTitle: String {
-        if purchaseManager.hasPaidSupporterAccess {
-            return purchaseManager.supporterAccessKind == .annual
-                ? L10n.string("年度 Pro 已启用")
-                : L10n.string("永久 Pro 已解锁")
-        }
-
-        if purchaseManager.isUsingTrialSupporterAccess {
-            return L10n.string("支持者版试用中")
-        }
-
-        if purchaseManager.isSupporterTrialExpired {
-            return L10n.string("体验已结束")
-        }
-
-        return L10n.string("解锁进阶功能")
-    }
-
-    private var supporterRowSubtitle: String {
-        if purchaseManager.hasPaidSupporterAccess {
-            return purchaseManager.supporterAccessKind == .annual
-                ? L10n.string("查看订阅状态和功能区别")
-                : L10n.string("查看购买信息和功能区别")
-        }
-
-        if purchaseManager.isUsingTrialSupporterAccess {
-            return String(format: L10n.string("还剩 %lld 天，可选择年度或永久 Pro"), purchaseManager.supporterTrialDaysRemaining)
-        }
-
-        if purchaseManager.isSupporterTrialExpired {
-            return L10n.string("3 天体验已结束，可选择年度或永久 Pro")
-        }
-
-        if purchaseManager.canStartSupporterTrial {
-            return L10n.string("可先免费体验 3 天，也可选择年度或永久 Pro")
-        }
-
-        return L10n.string("可选择年度订阅或一次购买的永久 Pro")
-    }
-
     // MARK: - 关于与支持
     private var aboutSection: some View {
         VStack(spacing: 16) {
@@ -310,18 +213,6 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                 SettingRow(
-                    icon: "person.text.rectangle",
-                    title: L10n.string("关于创作者"),
-                    action: {
-                        activeSheet = .author
-                    }
-                )
-
-                Divider()
-                    .background(PhotoDeleteStyle.hairline)
-                    .padding(.horizontal, 16)
-
-                SettingRow(
                     icon: "lock.shield",
                     iconColor: PhotoDeleteStyle.positive,
                     title: L10n.string("隐私说明"),
@@ -346,11 +237,6 @@ struct SettingsView: View {
             }
             .photoDeleteCard()
         }
-    }
-
-    // MARK: - One Apps 系列
-    private var moreAppsSection: some View {
-        OneAppsPromotionSection()
     }
 
     // MARK: - 偏好设置
@@ -731,9 +617,7 @@ struct SettingsView: View {
 private enum SettingsSheet: Identifiable {
     case mail
     case about
-    case author
     case privacy
-    case supporter
     case cleanupActivity
     case gestureSettings
     case languageSettings
@@ -743,9 +627,7 @@ private enum SettingsSheet: Identifiable {
         switch self {
         case .mail: return "mail"
         case .about: return "about"
-        case .author: return "author"
         case .privacy: return "privacy"
-        case .supporter: return "supporter"
         case .cleanupActivity: return "cleanupActivity"
         case .gestureSettings: return "gestureSettings"
         case .languageSettings: return "languageSettings"
@@ -1700,11 +1582,8 @@ private struct LanguageSettingsView: View {
 private struct AppearanceSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @EnvironmentObject private var dataManager: DataManager
-    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppConstants.appAppearanceKey) private var selectedAppearanceID = AppAppearance.system.rawValue
     @AppStorage(AppConstants.appThemeKey) private var selectedThemeID = PhotoDeleteTheme.defaultTheme.rawValue
-    @State private var showingSupporter = false
 
     private let themeColumns = [
         GridItem(.flexible(), spacing: 10),
@@ -1740,15 +1619,6 @@ private struct AppearanceSettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingSupporter) {
-            SupporterView()
-                .environmentObject(dataManager)
-                .environmentObject(purchaseManager)
-        }
-        .onAppear(perform: ensureThemeAccess)
-        .onChange(of: purchaseManager.isSupporter) { _ in
-            ensureThemeAccess()
-        }
     }
 
     private var headerSection: some View {
@@ -1770,7 +1640,7 @@ private struct AppearanceSettingsView: View {
                 Text(L10n.string("界面色调"))
                     .photoDeleteSectionHeading()
 
-                Text(canChooseThemes ? L10n.string("色调会影响背景、图标、按钮和选中状态。") : L10n.string("支持者版可切换更多主题。"))
+                Text(L10n.string("色调会影响背景、图标、按钮和选中状态。"))
                     .photoDeleteSecondaryLabel(.subheadline)
             }
 
@@ -1783,15 +1653,9 @@ private struct AppearanceSettingsView: View {
     }
 
     private func themeButton(_ theme: PhotoDeleteTheme) -> some View {
-        let isLocked = !canChooseThemes && theme != .defaultTheme
         let isSelected = selectedTheme == theme
 
         return Button {
-            guard !isLocked else {
-                showingSupporter = true
-                HapticManager.impact(.light)
-                return
-            }
             selectedThemeID = theme.rawValue
             HapticManager.impact(.light)
         } label: {
@@ -1799,7 +1663,7 @@ private struct AppearanceSettingsView: View {
                 HStack {
                     PhotoDeleteThemeSwatches(colors: theme.swatches)
                     Spacer(minLength: 8)
-                    Image(systemName: themeStatusImage(isSelected: isSelected, isLocked: isLocked))
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(isSelected ? theme.selectionTint : PhotoDeleteStyle.tertiaryText)
                 }
@@ -1827,12 +1691,11 @@ private struct AppearanceSettingsView: View {
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .opacity(isLocked ? 0.76 : 1)
         }
         .buttonStyle(.plain)
-        .accessibilityHint(Text(isLocked ? L10n.string("支持者版可切换更多主题。") : theme.subtitle))
+        .accessibilityHint(Text(theme.subtitle))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityValue(Text(isSelected ? L10n.string("已选") : isLocked ? L10n.string("解锁后可用") : L10n.string("未选择")))
+        .accessibilityValue(Text(isSelected ? L10n.string("已选") : L10n.string("未选择")))
     }
 
     private var appearanceSection: some View {
@@ -1889,22 +1752,7 @@ private struct AppearanceSettingsView: View {
     }
 
     private var selectedTheme: PhotoDeleteTheme {
-        guard canChooseThemes else { return .defaultTheme }
         return PhotoDeleteTheme.normalized(selectedThemeID)
-    }
-
-    private var canChooseThemes: Bool {
-        purchaseManager.isSupporter
-    }
-
-    private func ensureThemeAccess() {
-        guard !canChooseThemes, selectedThemeID != PhotoDeleteTheme.defaultTheme.rawValue else { return }
-        selectedThemeID = PhotoDeleteTheme.defaultTheme.rawValue
-    }
-
-    private func themeStatusImage(isSelected: Bool, isLocked: Bool) -> String {
-        if isLocked { return "lock.fill" }
-        return isSelected ? "checkmark.circle.fill" : "circle"
     }
 }
 
@@ -2037,8 +1885,6 @@ struct AuthorView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .photoDeleteCard()
                         }
-
-                        CreatorMVPGuideSection()
 
                         Spacer(minLength: 24)
                     }
@@ -2270,5 +2116,4 @@ struct AboutView: View {
 #Preview {
     SettingsView()
         .environmentObject(DataManager())
-        .environmentObject(PurchaseManager())
 }

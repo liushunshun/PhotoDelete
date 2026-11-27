@@ -448,18 +448,6 @@ enum AppConstants {
     static let appAppearanceKey = "photoDeleteAppAppearance"
     static let appThemeKey = "photoDeleteAppTheme"
     static let openAlbumsTabNotificationName = Notification.Name("photoDeleteOpenAlbumsTab")
-    static let supporterAnnualProductID = "com.01mvp.photodelete.pro.annual"
-    static let supporterLifetimeProductID = "com.01mvp.photodelete.supporter.stats"
-    static let supporterProductIDs: Set<String> = [
-        supporterAnnualProductID,
-        supporterLifetimeProductID
-    ]
-    static let supporterEntitlementKey = "photoDeleteSupporterUnlocked"
-    static let supporterPurchaseDateKey = "photoDeleteSupporterPurchaseDate"
-    static let supporterProductIDKey = "photoDeleteSupporterProductID"
-    static let supporterExpirationDateKey = "photoDeleteSupporterExpirationDate"
-    static let supporterTrialStartDateKey = "photoDeleteSupporterTrialStartDate"
-    static let supporterTrialDuration: TimeInterval = 3 * 24 * 60 * 60
     static let isImageCompressionVisible = true
     static var privacyShortText: String {
         L10n.string("照片整理只在本机完成。不需要账号，也不会上传你的照片。")

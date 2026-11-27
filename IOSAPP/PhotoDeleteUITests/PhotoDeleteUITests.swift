@@ -58,37 +58,20 @@ final class PhotoDeleteUITests: XCTestCase {
     }
 
     @MainActor
-    func testProPaywallOffersAnnualAndLifetimePlans() throws {
+    func testAdvancedFeaturesDoNotShowPurchaseGate() throws {
         let app = makeApp(completedOnboarding: true)
         app.launch()
 
         XCTAssertTrue(app.staticTexts["整理"].waitForExistence(timeout: 10))
         openSettingsTab(in: app)
+        XCTAssertFalse(app.staticTexts["解锁进阶功能"].exists)
+        XCTAssertFalse(app.buttons["恢复购买"].exists)
 
-        guard let proEntry = waitForHittableButtonLabelContaining(
-            in: app,
-            substring: "解锁进阶功能",
-            timeout: 10
-        ) else {
-            XCTFail("Expected the OnePhoto Pro settings entry")
-            return
-        }
-        proEntry.tap()
-
-        XCTAssertTrue(app.staticTexts["OnePhoto Pro"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "年度 Pro")).firstMatch.waitForExistence(timeout: 10))
-        let lifetimePlan = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "永久 Pro")).firstMatch
-        XCTAssertTrue(lifetimePlan.waitForExistence(timeout: 10))
-        sleep(2)
-        let paywallScreenshot = XCTAttachment(screenshot: app.screenshot())
-        paywallScreenshot.name = "OnePhoto Pro Paywall"
-        paywallScreenshot.lifetime = .keepAlways
-        add(paywallScreenshot)
-        lifetimePlan.tap()
-        XCTAssertNotNil(waitForAnyElementLabelContaining(in: app, substring: "解锁永久 Pro", timeout: 5))
-        XCTAssertTrue(app.buttons["恢复购买"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["supporter-privacy-policy-link"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["supporter-terms-of-use-link"].exists)
+        openAdvancedTab(in: app)
+        XCTAssertTrue(app.staticTexts["进阶"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["OnePhoto Pro"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "年度 Pro")).firstMatch.exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "永久 Pro")).firstMatch.exists)
     }
 
     @MainActor
@@ -514,7 +497,7 @@ final class PhotoDeleteUITests: XCTestCase {
     func testSimilarPhotoPreviewCanMarkCurrentAssetForDeletion() throws {
         installPhotoLibraryInterruptionMonitor(allowDeletionConfirmation: true)
 
-        let app = makeApp(completedOnboarding: true, seedLibrary: true, supporterTrialActive: true)
+        let app = makeApp(completedOnboarding: true, seedLibrary: true)
         app.launch()
         _ = allowFullPhotoLibraryAccessIfNeeded(app: app)
 
@@ -887,8 +870,7 @@ final class PhotoDeleteUITests: XCTestCase {
         let app = makeApp(
             completedOnboarding: true,
             appLanguage: appLanguage,
-            seedLibrary: shouldSeedLibrary,
-            supporterTrialActive: true
+            seedLibrary: shouldSeedLibrary
         )
         app.launch()
         _ = allowFullPhotoLibraryAccessIfNeeded(app: app)
@@ -1025,8 +1007,7 @@ final class PhotoDeleteUITests: XCTestCase {
         let app = makeApp(
             completedOnboarding: true,
             appLanguage: appLanguage,
-            seedLibrary: false,
-            supporterTrialActive: true
+            seedLibrary: false
         )
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
@@ -1071,8 +1052,7 @@ final class PhotoDeleteUITests: XCTestCase {
     private func makeApp(
         completedOnboarding: Bool,
         appLanguage: String = "zh-Hans",
-        seedLibrary: Bool = false,
-        supporterTrialActive: Bool = false
+        seedLibrary: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment = [
@@ -1081,8 +1061,7 @@ final class PhotoDeleteUITests: XCTestCase {
             AppLaunchEnvironmentKey.appAppearance: "light",
             AppLaunchEnvironmentKey.seedLibrary: seedLibrary ? "1" : "0",
             AppLaunchEnvironmentKey.hasCompletedOnboarding: completedOnboarding ? "1" : "0",
-            AppLaunchEnvironmentKey.hasSeenIntro: completedOnboarding ? "1" : "0",
-            AppLaunchEnvironmentKey.supporterTrialActive: supporterTrialActive ? "1" : "0"
+            AppLaunchEnvironmentKey.hasSeenIntro: completedOnboarding ? "1" : "0"
         ]
         return app
     }
@@ -1622,5 +1601,4 @@ private enum AppLaunchEnvironmentKey {
     static let seedLibrary = "PHOTO_DELETE_UI_TEST_SEED_LIBRARY"
     static let hasCompletedOnboarding = "PHOTO_DELETE_UI_TEST_HAS_COMPLETED_ONBOARDING"
     static let hasSeenIntro = "PHOTO_DELETE_UI_TEST_HAS_SEEN_INTRO"
-    static let supporterTrialActive = "PHOTO_DELETE_UI_TEST_SUPPORTER_TRIAL_ACTIVE"
 }

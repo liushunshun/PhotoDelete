@@ -29,22 +29,9 @@
 		C8964B192E2162AE00B434E4 /* PhotoDeleteUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PhotoDeleteUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		C8964B3A2E2162AF00B434E4 /* Exceptions for "PhotoDelete" folder in "PhotoDelete" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				PhotoDelete.storekit,
-			);
-			target = C8964B012E2162AB00B434E4 /* PhotoDelete */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C8964B042E2162AB00B434E4 /* PhotoDelete */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				C8964B3A2E2162AF00B434E4 /* Exceptions for "PhotoDelete" folder in "PhotoDelete" target */,
-			);
 			path = PhotoDelete;
 			sourceTree = "<group>";
 		};
